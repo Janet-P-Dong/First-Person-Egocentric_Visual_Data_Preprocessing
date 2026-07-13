@@ -11,6 +11,7 @@ The longer-term research framing is that egocentric video may become a foundatio
 ```text
 docs/
   egocentric_first_person_video_pipeline_review.md
+  hardware_to_ready_dataset_flowchart.md
 LICENSE
 README.md
 ```
@@ -18,6 +19,7 @@ README.md
 ## Main Collection
 
 - [Egocentric First-Person Video: Literature Review, Trends, and Pipeline Protocol](docs/egocentric_first_person_video_pipeline_review.md)
+- [Hardware-to-Ready Dataset Flowchart](docs/hardware_to_ready_dataset_flowchart.md)
 
 This collection covers:
 
