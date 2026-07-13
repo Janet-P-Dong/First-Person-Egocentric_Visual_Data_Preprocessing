@@ -1,0 +1,23 @@
+.DS_Store
+.venv/
+.cache/
+__pycache__/
+*.pyc
+
+# Raw, processed, and generated research data
+data/
+outputs/
+output_*/
+obsidian/
+apa7_quicklook/
+apa7_render/
+
+# Manuscripts and local working artifacts
+*.docx
+*.pdf
+*.zip
+doi.txt
+
+# Local/generated reports that may contain sensitive or copyrighted material
+TDSEM_Organized_Readings_README.md
+chatgpt_project_notes/
