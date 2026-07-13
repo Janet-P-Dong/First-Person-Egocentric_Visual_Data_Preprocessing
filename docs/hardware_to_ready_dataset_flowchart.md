@@ -8,18 +8,24 @@ This flowchart turns the current egocentric-video literature review into an oper
 
 ```mermaid
 flowchart TD
-    A["Hardware Capture<br/>AI glasses / AR glasses / wearable camera / phone"] --> B["On-Device Session Metadata<br/>timestamps, device ID, FPS, resolution, battery, IMU, optional GPS"]
-    B --> C["Consent and Capture Governance<br/>participant ID, recording context, bystander policy, retention rules"]
-    C --> D{"Edge Preprocessing Needed?"}
+    A0["Legal / Ethics / IRB Gate<br/>jurisdiction, consent, bystanders, children, health, biometrics, audio, location"] --> A{"Capture Legally Approved?"}
+    A -->|"No or unclear"| A1["Stop / Redesign<br/>reduce modalities, change setting, remove audio, use benchmark or synthetic data"]
+    A -->|"Yes"| B["Hardware Capture<br/>AI glasses / AR glasses / wearable camera / phone"]
+    B --> C["On-Device Session Metadata<br/>timestamps, device ID, FPS, resolution, battery, IMU, optional GPS"]
+    C --> D["Consent and Capture Governance<br/>participant ID, recording context, bystander policy, retention rules"]
+    D --> E0{"Edge Preprocessing Needed?"}
 
-    D -->|"Yes: privacy, bandwidth, or real-time need"| E["Lightweight Edge Preprocessing<br/>keyframes, blur score, exposure score, motion quality, optional face/screen blur"]
-    D -->|"No: preserve raw signal"| F["Raw Upload Package<br/>video + metadata + sensor streams"]
+    E0 -->|"Yes: privacy, bandwidth, or real-time need"| E["Lightweight Edge Preprocessing<br/>keyframes, blur score, exposure score, motion quality, optional face/screen blur"]
+    E0 -->|"No: preserve raw signal"| F["Raw Upload Package<br/>video + metadata + sensor streams"]
     E --> F
 
-    F --> G["Secure Upload to Cloud Storage<br/>raw immutable object + manifest + checksum"]
-    G --> H["Ingestion Validation<br/>file integrity, duration, codec, timestamps, consent flags"]
-    H --> I{"Pass Validation?"}
-    I -->|"No"| I1["Quarantine / Repair Queue<br/>missing metadata, corrupt files, consent mismatch"]
+    F --> G{"Upload and External Processing Allowed?"}
+    G -->|"No"| G1["On-Device / Private Processing Only<br/>no third-party model or external cloud transfer"]
+    G -->|"Yes"| H0["Secure Upload to Cloud Storage<br/>raw immutable object + manifest + checksum"]
+    G1 --> H["Ingestion Validation<br/>file integrity, duration, codec, timestamps, consent flags"]
+    H0 --> H
+    H --> I{"Pass Legal + Technical Validation?"}
+    I -->|"No"| I1["Quarantine / Legal Hold / Repair Queue<br/>missing metadata, corrupt files, consent mismatch"]
     I -->|"Yes"| J["Cloud Transcoding<br/>analysis MP4, preview MP4, standardized FPS/resolution"]
 
     J --> K["Frame and Clip Sampling<br/>uniform frames, scene-change frames, motion-aware clips, sliding windows"]
@@ -41,7 +47,9 @@ flowchart TD
     S --> T["Event Timeline Store<br/>timestamped events, labels, objects, confidence, model/prompt version"]
     T --> U["Human Review and Active Learning<br/>low confidence, sensitive clips, high-value labels, coder disagreement"]
     U --> V["Dataset Assembly<br/>splits, manifests, labels, embeddings, QA reports, data cards"]
-    V --> W["Ready-to-Use Dataset<br/>training / validation / test / audit sets"]
+    V --> W0{"Release Legally Approved?"}
+    W0 -->|"No"| W1["Restricted Dataset Only<br/>internal use, data-use agreement, no public release"]
+    W0 -->|"Yes"| W["Ready-to-Use Dataset<br/>training / validation / test / audit sets"]
 ```
 
 ## Data Products by Stage
@@ -60,6 +68,7 @@ flowchart TD
 | Classification | Label table | `event_id`, `coarse_scene`, `fine_action`, `active_objects`, `caption`, `confidence` |
 | Human review | Reviewed labels | `event_id`, `human_label`, `reviewer_id`, `agreement_status`, `adjudication_notes` |
 | Dataset assembly | Dataset release folder | `dataset_version`, `split`, `manifest`, `label_schema`, `data_card`, `known_limitations` |
+| Legal release review | Release decision record | `release_level`, `allowed_uses`, `prohibited_uses`, `approver`, `approval_date`, `withdrawal_process` |
 
 ## Dataset Assembly Flow
 
@@ -124,12 +133,14 @@ dataset_version/
 
 A dataset should not be treated as ready until it has:
 
+- Legal/ethics approval for capture, processing, model inference, sharing, retention, and deletion.
 - Raw-to-derived traceability from each frame, clip, feature, and label back to source timestamps.
 - Participant-wise or site-wise splits that prevent identity and environment leakage.
 - A documented label schema with coarse scene, fine action/event, active object, privacy, and review-status fields.
 - Model and prompt version records for all automated labels and captions.
 - Human review for sensitive, low-confidence, or theoretically important events.
 - A data card describing capture devices, population, consent boundaries, known biases, missingness, and permitted uses.
+- A release decision that distinguishes raw closed data, restricted derived data, and public aggregate or benchmark data.
 
 ## Practical Rule
 

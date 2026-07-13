@@ -26,6 +26,7 @@ chatgpt_project_notes/
 docs/*
 !docs/egocentric_first_person_video_pipeline_review.md
 !docs/hardware_to_ready_dataset_flowchart.md
+!docs/legal_governance_checklist.md
 
 # Local TDSEM/dissertation pipeline code not intended for this public collection
 src/

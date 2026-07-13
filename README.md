@@ -12,6 +12,7 @@ The longer-term research framing is that egocentric video may become a foundatio
 docs/
   egocentric_first_person_video_pipeline_review.md
   hardware_to_ready_dataset_flowchart.md
+  legal_governance_checklist.md
 LICENSE
 README.md
 ```
@@ -20,6 +21,7 @@ README.md
 
 - [Egocentric First-Person Video: Literature Review, Trends, and Pipeline Protocol](docs/egocentric_first_person_video_pipeline_review.md)
 - [Hardware-to-Ready Dataset Flowchart](docs/hardware_to_ready_dataset_flowchart.md)
+- [Legal and Governance Checklist for Egocentric Video Datasets](docs/legal_governance_checklist.md)
 
 This collection covers:
 
@@ -27,6 +29,7 @@ This collection covers:
 - Feature extraction, hand-object interaction, temporal segmentation, and multimodal classification.
 - Edge and cloud pipeline design for fast upload-time processing.
 - Privacy, consent, and governance considerations for wearable first-person video.
+- Legal-first review points for capture, upload, model inference, dataset release, and deletion.
 - A standardized literature-review process for keeping the collection up to date.
 - Extensions for linking visual-context changes with emotion, physiology, and biological state changes.
 
