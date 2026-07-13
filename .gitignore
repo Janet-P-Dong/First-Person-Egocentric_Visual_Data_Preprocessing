@@ -21,3 +21,16 @@ doi.txt
 # Local/generated reports that may contain sensitive or copyrighted material
 TDSEM_Organized_Readings_README.md
 chatgpt_project_notes/
+
+# Keep GitHub docs focused on the public egocentric-video collection
+docs/*
+!docs/egocentric_first_person_video_pipeline_review.md
+
+# Local TDSEM/dissertation pipeline code not intended for this public collection
+src/
+scripts/
+tests/
+run_*.py
+format_apa7_docx.py
+requirements-topic-modeling.txt
+flofy.sh

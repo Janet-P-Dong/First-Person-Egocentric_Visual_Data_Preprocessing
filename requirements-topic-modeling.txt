@@ -1,5 +1,0 @@
-bertopic
-sentence-transformers
-umap-learn
-hdbscan
-seaborn
