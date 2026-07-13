@@ -1,4 +1,6 @@
-# Theory-Driven Systematic Evidence Mapping for Developmental Calibration Research
+# First-Person-Egocentric_Visual_Data_Preprocessing
+
+Research pipeline and literature-method collection for first-person/egocentric visual data preprocessing, cloud classification, and developmental calibration research.
 
 This repository contains a reproducible Python pipeline for a doctoral dissertation literature review. The project imports Web of Science `savedrecs.txt` exports, extracts bibliographic metadata, prepares text for BERT/BERTopic clustering, and supports human-in-the-loop evidence mapping for developmental psychology literature.
 
