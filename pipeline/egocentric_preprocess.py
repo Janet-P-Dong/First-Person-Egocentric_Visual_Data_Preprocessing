@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local legal-first preprocessing runner for egocentric video.
+"""Local legal-first preprocessing runner for individual-submitted video.
 
 This starter pipeline intentionally avoids cloud upload and heavy model calls.
 It classifies a video into a processing profile using metadata and optional
@@ -58,6 +58,17 @@ class Governance:
 
 
 @dataclass
+class VideoContext:
+    viewpoint: str
+    mount: str
+    camera_motion: str
+    filming_theme: str
+    location_sensitivity: str
+    purpose: str
+    contains_people: bool
+
+
+@dataclass
 class VideoMetrics:
     blur_laplacian_mean: float | None
     brightness_mean: float | None
@@ -71,6 +82,8 @@ class VideoMetrics:
 class ProcessingPlan:
     video_type: str
     profile: str
+    legal_risk_level: str
+    pipeline_chain: list[str]
     required_processing: list[str]
     prohibited_or_deferred_processing: list[str]
     reasons: list[str]
@@ -196,6 +209,7 @@ def infer_video_type(
     metadata: dict[str, Any],
     metrics: VideoMetrics,
     governance: Governance,
+    context: VideoContext,
 ) -> ProcessingPlan:
     duration = metadata.get("duration_seconds") or 0
     fps = metadata.get("fps") or 0
@@ -209,38 +223,70 @@ def infer_video_type(
         "session_manifest",
     ]
     deferred: list[str] = []
+    pipeline_chain: list[str] = [
+        "legal_governance_gate",
+        "raw_video_hashing",
+        "metadata_extraction",
+        "technical_quality_assessment",
+        "privacy_prescan",
+    ]
 
     sensitive = governance.sensitive_flags
     if sensitive:
         reasons.append(f"sensitive_governance_flags={','.join(sensitive)}")
         required.extend(["restricted_access", "manual_privacy_review"])
+        pipeline_chain.append("manual_privacy_review")
+
+    legal_risk_level = infer_legal_risk(governance, context)
+    reasons.append(f"legal_risk_level={legal_risk_level}")
+    if legal_risk_level == "red":
+        required.extend(["formal_legal_or_irb_review", "restricted_access", "release_gate"])
+        pipeline_chain.insert(1, "formal_legal_or_irb_review")
+    elif legal_risk_level == "yellow":
+        required.extend(["documented_consent_review", "bystander_or_location_review"])
+        pipeline_chain.insert(1, "documented_consent_review")
 
     if not governance.consent_approved:
         return ProcessingPlan(
             video_type="blocked_unapproved_capture",
             profile="governance_blocked",
+            legal_risk_level=legal_risk_level,
+            pipeline_chain=["legal_governance_gate", "metadata_extraction", "stop_no_derivatives"],
             required_processing=["legal_review", "consent_resolution"],
             prohibited_or_deferred_processing=["derived_media_generation", "model_inference", "cloud_upload", "dataset_release"],
             reasons=["consent_approved=false"],
         )
 
+    video_type = infer_declared_video_type(context, duration)
+    required.extend(required_for_declared_context(context))
+    pipeline_chain.extend(chain_for_declared_context(context))
+    reasons.extend(context_reasons(context))
+
     if duration >= 600:
-        video_type = "long_untrimmed_egocentric"
+        if video_type in {"first_person_short_clip", "third_person_short_clip", "generic_short_clip"}:
+            video_type = infer_declared_video_type(context, duration)
         required.extend(["scene_change_keyframes", "fixed_window_clips", "temporal_segmentation"])
         reasons.append("duration>=600s")
     elif duration <= 30:
-        video_type = "short_clip"
+        if context.viewpoint == "first_person":
+            video_type = "first_person_short_clip"
+        elif context.viewpoint == "third_person":
+            video_type = "third_person_short_clip"
+        else:
+            video_type = "generic_short_clip"
         required.extend(["dense_keyframes", "clip_level_classification"])
         reasons.append("duration<=30s")
     else:
-        video_type = "medium_session"
+        if video_type.endswith("_short_clip"):
+            video_type = infer_declared_video_type(context, duration)
         required.extend(["regular_keyframes", "fixed_window_clips"])
         reasons.append("30s<duration<600s")
 
     if metrics.metrics_available and metrics.motion_mean_absdiff is not None:
         if metrics.motion_mean_absdiff >= 35:
-            video_type = "high_motion_first_person"
+            video_type = "high_motion_first_person" if context.viewpoint == "first_person" else "high_motion_video"
             required.extend(["motion_aware_sampling", "stabilization_quality_flag"])
+            pipeline_chain.append("motion_aware_sampling")
             reasons.append("high sampled frame difference")
         elif metrics.motion_mean_absdiff <= 8 and duration > 60:
             required.append("low_motion_duplicate_filter")
@@ -265,6 +311,7 @@ def infer_video_type(
 
     if metadata.get("audio_present") and not governance.audio_approved:
         required.append("strip_audio_from_derivatives")
+        pipeline_chain.append("audio_removal_from_derivatives")
         deferred.append("audio_transcription")
         reasons.append("audio present but not approved")
 
@@ -278,20 +325,136 @@ def infer_video_type(
 
     if governance.contains_minors or governance.contains_health_context or governance.biometric_or_emotion_inference:
         profile = "restricted_sensitive_research"
-    elif video_type == "long_untrimmed_egocentric":
+    elif context.purpose == "commercial" and legal_risk_level != "green":
+        profile = "commercial_restricted_review"
+    elif "long_untrimmed" in video_type:
         profile = "long_form_segmentation"
-    elif video_type == "high_motion_first_person":
+    elif video_type in {"high_motion_first_person", "high_motion_video"}:
         profile = "high_motion_quality_control"
+    elif context.viewpoint == "third_person" and context.camera_motion == "stationary":
+        profile = "third_person_stationary_surveillance_review"
     else:
         profile = "standard_local_preprocessing"
+
+    pipeline_chain.extend(
+        [
+            "analysis_transcode",
+            "keyframe_extraction",
+            "fixed_window_clip_generation",
+            "event_or_scene_index_manifest",
+            "human_review_queue",
+            "dataset_release_gate",
+        ]
+    )
 
     return ProcessingPlan(
         video_type=video_type,
         profile=profile,
+        legal_risk_level=legal_risk_level,
+        pipeline_chain=dedupe_preserve_order(pipeline_chain),
         required_processing=sorted(set(required)),
         prohibited_or_deferred_processing=sorted(set(deferred)),
         reasons=reasons,
     )
+
+
+def dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            ordered.append(item)
+    return ordered
+
+
+def infer_legal_risk(governance: Governance, context: VideoContext) -> str:
+    red_themes = {"children", "clinical", "school", "workplace_monitoring"}
+    if (
+        governance.contains_minors
+        or governance.contains_health_context
+        or governance.biometric_or_emotion_inference
+        or context.filming_theme in red_themes
+        or context.location_sensitivity == "high"
+        or context.purpose == "commercial" and (context.contains_people or governance.contains_bystanders)
+    ):
+        return "red"
+    if (
+        governance.contains_bystanders
+        or context.contains_people
+        or context.location_sensitivity == "medium"
+        or context.filming_theme in {"daily_people", "workplace", "education", "public_space", "private_home"}
+    ):
+        return "yellow"
+    return "green"
+
+
+def infer_declared_video_type(context: VideoContext, duration: float) -> str:
+    length = "long_untrimmed" if duration >= 600 else "medium_session"
+    if context.viewpoint == "first_person":
+        if context.mount in {"glasses", "headwear"}:
+            return f"{length}_first_person_head_mounted"
+        if context.mount == "chest":
+            return f"{length}_first_person_chest_mounted"
+        return f"{length}_first_person"
+    if context.viewpoint == "third_person":
+        if context.camera_motion == "stationary":
+            return f"{length}_third_person_stationary"
+        if context.camera_motion == "following":
+            return f"{length}_third_person_following"
+        return f"{length}_third_person"
+    if context.viewpoint == "mixed":
+        return f"{length}_mixed_viewpoint"
+    return f"{length}_unknown_viewpoint"
+
+
+def required_for_declared_context(context: VideoContext) -> list[str]:
+    required = ["declared_video_context"]
+    if context.viewpoint == "first_person":
+        required.extend(["egocentric_motion_qc", "hand_object_sampling"])
+    elif context.viewpoint == "third_person":
+        required.extend(["camera_motion_classification", "person_and_scene_review"])
+    elif context.viewpoint == "mixed":
+        required.extend(["viewpoint_separation", "cross_view_alignment"])
+
+    if context.camera_motion == "stationary":
+        required.append("background_scene_baseline")
+    elif context.camera_motion in {"following", "wearer_motion", "handheld"}:
+        required.append("motion_stability_qc")
+
+    if context.filming_theme in {"daily_people", "children", "workplace", "clinical", "education"}:
+        required.extend(["people_privacy_review", "face_screen_text_prescan"])
+    if context.filming_theme == "nature":
+        required.append("environment_scene_sampling")
+    if context.purpose in {"commercial", "public_benchmark"}:
+        required.append("release_terms_review")
+    return required
+
+
+def chain_for_declared_context(context: VideoContext) -> list[str]:
+    chain: list[str] = []
+    if context.viewpoint == "first_person":
+        chain.extend(["egocentric_quality_metrics", "hand_object_candidate_sampling"])
+    elif context.viewpoint == "third_person":
+        chain.extend(["camera_motion_assessment", "people_and_background_detection"])
+    elif context.viewpoint == "mixed":
+        chain.extend(["viewpoint_split", "cross_view_time_alignment"])
+
+    if context.filming_theme in {"daily_people", "children", "workplace", "clinical", "education"}:
+        chain.extend(["face_screen_text_privacy_scan", "sensitive_context_review"])
+    if context.purpose in {"commercial", "public_benchmark"}:
+        chain.append("license_and_release_terms_review")
+    return chain
+
+
+def context_reasons(context: VideoContext) -> list[str]:
+    return [
+        f"declared_viewpoint={context.viewpoint}",
+        f"declared_mount={context.mount}",
+        f"declared_camera_motion={context.camera_motion}",
+        f"declared_theme={context.filming_theme}",
+        f"declared_purpose={context.purpose}",
+    ]
 
 
 def write_json(path: Path, data: Any) -> None:
@@ -394,12 +557,64 @@ def extract_fixed_window_clips(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Legal-first local preprocessing for egocentric video.")
+    parser = argparse.ArgumentParser(description="Legal-first local preprocessing for individual-submitted video.")
     parser.add_argument("video", type=Path, help="Input video file")
     parser.add_argument("--output-dir", type=Path, required=True, help="Output dataset/session directory")
+    parser.add_argument("--profile-json", type=Path, help="Optional questionnaire JSON with video_context and governance fields")
     parser.add_argument("--session-id", default=None, help="Stable session ID; defaults to video stem")
     parser.add_argument("--jurisdiction", default="unspecified", help="Legal jurisdiction for the capture")
     parser.add_argument("--capture-context", default="unspecified", help="Capture context, e.g. lab/home/school/clinic")
+    parser.add_argument(
+        "--viewpoint",
+        choices=["first_person", "third_person", "mixed", "screen_recording", "unknown"],
+        default="unknown",
+        help="Declared video viewpoint",
+    )
+    parser.add_argument(
+        "--mount",
+        choices=["glasses", "headwear", "chest", "handheld", "vehicle", "drone", "stationary_camera", "following_camera", "unknown"],
+        default="unknown",
+        help="Declared camera mounting or capture position",
+    )
+    parser.add_argument(
+        "--camera-motion",
+        choices=["stationary", "following", "wearer_motion", "handheld", "vehicle_motion", "unknown"],
+        default="unknown",
+        help="Declared camera motion pattern",
+    )
+    parser.add_argument(
+        "--filming-theme",
+        choices=[
+            "daily_people",
+            "children",
+            "nature",
+            "workplace",
+            "workplace_monitoring",
+            "clinical",
+            "education",
+            "sports",
+            "driving",
+            "public_space",
+            "private_home",
+            "industrial",
+            "other",
+        ],
+        default="other",
+        help="Declared filming theme",
+    )
+    parser.add_argument(
+        "--location-sensitivity",
+        choices=["low", "medium", "high", "unknown"],
+        default="unknown",
+        help="Declared location sensitivity",
+    )
+    parser.add_argument(
+        "--purpose",
+        choices=["research", "non_commercial", "commercial", "internal_testing", "public_benchmark", "unknown"],
+        default="unknown",
+        help="Declared purpose of processing",
+    )
+    parser.add_argument("--contains-people", action="store_true", help="Video contains identifiable or potentially identifiable people")
     parser.add_argument("--consent-approved", action="store_true", help="Required to generate derived media")
     parser.add_argument("--audio-approved", action="store_true", help="Allow audio in derived outputs")
     parser.add_argument("--external-processing-approved", action="store_true", help="Allow external/cloud model inference")
@@ -416,6 +631,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def load_profile_json(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    profile_path = path.expanduser().resolve()
+    return json.loads(profile_path.read_text(encoding="utf-8"))
+
+
+def profile_value(profile: dict[str, Any], section: str, key: str, default: Any) -> Any:
+    value = profile.get(section, {}).get(key, default)
+    return default if value is None else value
+
+
+def profile_bool(profile: dict[str, Any], section: str, key: str, cli_value: bool) -> bool:
+    return bool(cli_value or profile.get(section, {}).get(key, False))
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     video_path = args.video.expanduser().resolve()
@@ -430,23 +661,37 @@ def main(argv: list[str] | None = None) -> int:
     metadata_dir = session_dir / "metadata"
     derivatives_dir = session_dir / "derivatives"
 
+    profile = load_profile_json(args.profile_json)
     governance = Governance(
-        consent_approved=args.consent_approved,
-        audio_approved=args.audio_approved,
-        external_processing_approved=args.external_processing_approved,
-        release_approved=args.release_approved,
-        contains_bystanders=args.contains_bystanders,
-        contains_minors=args.contains_minors,
-        contains_health_context=args.contains_health_context,
-        biometric_or_emotion_inference=args.biometric_or_emotion_inference,
-        jurisdiction=args.jurisdiction,
-        capture_context=args.capture_context,
+        consent_approved=profile_bool(profile, "governance", "consent_approved", args.consent_approved),
+        audio_approved=profile_bool(profile, "governance", "audio_approved", args.audio_approved),
+        external_processing_approved=profile_bool(
+            profile, "governance", "external_processing_approved", args.external_processing_approved
+        ),
+        release_approved=profile_bool(profile, "governance", "release_approved", args.release_approved),
+        contains_bystanders=profile_bool(profile, "governance", "contains_bystanders", args.contains_bystanders),
+        contains_minors=profile_bool(profile, "governance", "contains_minors", args.contains_minors),
+        contains_health_context=profile_bool(profile, "governance", "contains_health_context", args.contains_health_context),
+        biometric_or_emotion_inference=profile_bool(
+            profile, "governance", "biometric_or_emotion_inference", args.biometric_or_emotion_inference
+        ),
+        jurisdiction=profile_value(profile, "governance", "jurisdiction", args.jurisdiction),
+        capture_context=profile_value(profile, "governance", "capture_context", args.capture_context),
+    )
+    context = VideoContext(
+        viewpoint=profile_value(profile, "video_context", "viewpoint", args.viewpoint),
+        mount=profile_value(profile, "video_context", "mount", args.mount),
+        camera_motion=profile_value(profile, "video_context", "camera_motion", args.camera_motion),
+        filming_theme=profile_value(profile, "video_context", "filming_theme", args.filming_theme),
+        location_sensitivity=profile_value(profile, "video_context", "location_sensitivity", args.location_sensitivity),
+        purpose=profile_value(profile, "video_context", "purpose", args.purpose),
+        contains_people=profile_bool(profile, "video_context", "contains_people", args.contains_people),
     )
 
     raw_metadata = ffprobe_metadata(video_path)
     metadata = summarize_metadata(raw_metadata)
     metrics = compute_frame_metrics(video_path, args.sample_frames)
-    plan = infer_video_type(video_path, metadata, metrics, governance)
+    plan = infer_video_type(video_path, metadata, metrics, governance, context)
 
     run_manifest: dict[str, Any] = {
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -455,6 +700,7 @@ def main(argv: list[str] | None = None) -> int:
         "input_video_sha256": sha256_file(video_path),
         "output_dir": str(session_dir),
         "governance": asdict(governance),
+        "video_context": asdict(context),
         "metadata": metadata,
         "frame_metrics": asdict(metrics),
         "processing_plan": asdict(plan),
@@ -464,6 +710,7 @@ def main(argv: list[str] | None = None) -> int:
     write_json(metadata_dir / "ffprobe_raw.json", raw_metadata)
     write_json(metadata_dir / "session_manifest.json", run_manifest)
     write_json(metadata_dir / "governance.json", asdict(governance))
+    write_json(metadata_dir / "video_context.json", asdict(context))
     write_json(metadata_dir / "processing_plan.json", asdict(plan))
 
     if plan.profile == "governance_blocked":

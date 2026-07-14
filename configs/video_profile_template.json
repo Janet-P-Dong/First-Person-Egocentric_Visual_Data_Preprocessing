@@ -1,0 +1,23 @@
+{
+  "video_context": {
+    "viewpoint": "first_person",
+    "mount": "glasses",
+    "camera_motion": "wearer_motion",
+    "filming_theme": "daily_people",
+    "location_sensitivity": "medium",
+    "purpose": "research",
+    "contains_people": true
+  },
+  "governance": {
+    "consent_approved": false,
+    "audio_approved": false,
+    "external_processing_approved": false,
+    "release_approved": false,
+    "contains_bystanders": true,
+    "contains_minors": false,
+    "contains_health_context": false,
+    "biometric_or_emotion_inference": false,
+    "jurisdiction": "unspecified",
+    "capture_context": "unspecified"
+  }
+}

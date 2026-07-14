@@ -29,6 +29,7 @@ docs/*
 !docs/legal_governance_checklist.md
 !docs/hardware_software_setup.md
 !docs/preprocessing_pipeline_logic.md
+!docs/golden_standard_video_preprocessing_toolkit.md
 
 # Local TDSEM/dissertation pipeline code not intended for this public collection
 src/
@@ -43,6 +44,8 @@ flofy.sh
 !pipeline/
 !pipeline/egocentric_preprocess.py
 !requirements-preprocessing.txt
+!configs/
+!configs/video_profile_template.json
 
 # Generated preprocessing runs
 preprocessing_runs/

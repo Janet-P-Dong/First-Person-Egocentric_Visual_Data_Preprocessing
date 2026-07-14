@@ -10,18 +10,21 @@ pipeline/egocentric_preprocess.py
 
 The script is intentionally local-first and legal-first. It does not upload videos, call external model APIs, or produce a public dataset by default. Its first job is to decide whether a video is allowed to be processed, what kind of video it appears to be, and which preprocessing profile should be used.
 
+Although the file name still says `egocentric`, the current logic is broader: it accepts first-person, third-person, mixed-viewpoint, and unknown videos.
+
 ## Core Logic
 
 ```mermaid
 flowchart TD
     A["Input video"] --> B["ffprobe metadata"]
     A --> C["Optional OpenCV frame metrics"]
-    B --> D["Governance flags"]
+    D0["User/developer profile<br/>viewpoint, mount, theme, sensitivity, purpose"] --> D["Governance + video context"]
+    B --> D
     C --> D
     D --> E{"Consent approved?"}
     E -->|"No"| F["Stop after manifests<br/>status: blocked_by_governance"]
-    E -->|"Yes"| G["Infer video type and processing profile"]
-    G --> H["Write session manifest<br/>metadata + metrics + governance + plan"]
+    E -->|"Yes"| G["Infer legal risk, video type, and processing profile"]
+    G --> H["Write session manifest<br/>metadata + metrics + governance + context + plan"]
     H --> I{"Dry run?"}
     I -->|"Yes"| J["No derived media"]
     I -->|"No"| K["Generate analysis video, keyframes, and fixed-window clips"]
@@ -57,6 +60,29 @@ The script uses rule-based classification from metadata, optional sampled-frame 
 | Minors, health, biometrics, emotion inference | Sensitive research context | Restricted processing profile and manual legal/privacy review |
 | Filename hints such as `clinic`, `school`, `child`, `therapy`, `home` | Possible sensitive context | Add filename-sensitive review flag |
 
+## User/Developer Intake Fields
+
+The toolkit supports direct CLI arguments or a questionnaire JSON file.
+
+| Field | Supported Values |
+| --- | --- |
+| `viewpoint` | `first_person`, `third_person`, `mixed`, `screen_recording`, `unknown` |
+| `mount` | `glasses`, `headwear`, `chest`, `handheld`, `vehicle`, `drone`, `stationary_camera`, `following_camera`, `unknown` |
+| `camera_motion` | `stationary`, `following`, `wearer_motion`, `handheld`, `vehicle_motion`, `unknown` |
+| `filming_theme` | `daily_people`, `children`, `nature`, `workplace`, `workplace_monitoring`, `clinical`, `education`, `sports`, `driving`, `public_space`, `private_home`, `industrial`, `other` |
+| `location_sensitivity` | `low`, `medium`, `high`, `unknown` |
+| `purpose` | `research`, `non_commercial`, `commercial`, `internal_testing`, `public_benchmark`, `unknown` |
+| `contains_people` | true/false |
+
+Questionnaire JSON:
+
+```bash
+python3 pipeline/egocentric_preprocess.py sample.mp4 \
+  --output-dir preprocessing_runs \
+  --profile-json configs/video_profile_template.json \
+  --dry-run
+```
+
 ## Processing Profiles
 
 | Profile | When Used | Default Processing |
@@ -66,6 +92,8 @@ The script uses rule-based classification from metadata, optional sampled-frame 
 | `long_form_segmentation` | Long untrimmed recording | Analysis MP4, regular keyframes, fixed-window clips, temporal segmentation queue |
 | `high_motion_quality_control` | Strong egocentric motion | Keyframes, clips, motion-aware review, stabilization quality flag |
 | `restricted_sensitive_research` | Children, health context, biometrics, emotion inference | Private/local processing, privacy review, no public release by default |
+| `commercial_restricted_review` | Commercial use with people, bystanders, or sensitive context | Legal review, release terms, restricted processing |
+| `third_person_stationary_surveillance_review` | Stationary third-person camera | Background baseline, people/scene review, surveillance-risk review |
 
 ## Output Layout
 
@@ -75,6 +103,7 @@ run_output/
     metadata/
       ffprobe_raw.json
       governance.json
+      video_context.json
       processing_plan.json
       session_manifest.json
       outputs_manifest.json
@@ -127,6 +156,21 @@ python3 pipeline/egocentric_preprocess.py sample.mp4 \
   --consent-approved \
   --audio-approved \
   --external-processing-approved
+```
+
+Third-person stationary workplace video, plan only:
+
+```bash
+python3 pipeline/egocentric_preprocess.py sample.mp4 \
+  --output-dir preprocessing_runs \
+  --viewpoint third_person \
+  --mount stationary_camera \
+  --camera-motion stationary \
+  --filming-theme workplace \
+  --location-sensitivity high \
+  --purpose internal_testing \
+  --contains-people \
+  --dry-run
 ```
 
 ## Next Extensions
