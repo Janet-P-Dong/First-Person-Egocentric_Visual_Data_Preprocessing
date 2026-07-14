@@ -174,6 +174,14 @@ fiftyone
 label-studio or cvat
 ```
 
+On macOS, the basic media tools can be installed with:
+
+```bash
+brew install ffmpeg exiftool
+```
+
+Python dependencies for the starter preprocessing script are listed in `requirements-preprocessing.txt`.
+
 ## Recommended Cloud Services
 
 The exact provider can be AWS, Azure, Google Cloud, Tencent Cloud, or a university/private cloud. The required capabilities are more important than the brand.

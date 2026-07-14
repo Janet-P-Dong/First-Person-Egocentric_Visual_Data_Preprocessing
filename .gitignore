@@ -28,6 +28,7 @@ docs/*
 !docs/hardware_to_ready_dataset_flowchart.md
 !docs/legal_governance_checklist.md
 !docs/hardware_software_setup.md
+!docs/preprocessing_pipeline_logic.md
 
 # Local TDSEM/dissertation pipeline code not intended for this public collection
 src/
@@ -37,3 +38,11 @@ run_*.py
 format_apa7_docx.py
 requirements-topic-modeling.txt
 flofy.sh
+
+# Public egocentric preprocessing prototype
+!pipeline/
+!pipeline/egocentric_preprocess.py
+!requirements-preprocessing.txt
+
+# Generated preprocessing runs
+preprocessing_runs/
