@@ -11,6 +11,7 @@ The longer-term research framing is that egocentric video may become a foundatio
 ```text
 docs/
   egocentric_first_person_video_pipeline_review.md
+  governed_video_data_platform_blueprint.md
   golden_standard_video_preprocessing_toolkit.md
   hardware_to_ready_dataset_flowchart.md
   legal_governance_checklist.md
@@ -28,6 +29,7 @@ README.md
 ## Main Collection
 
 - [Egocentric First-Person Video: Literature Review, Trends, and Pipeline Protocol](docs/egocentric_first_person_video_pipeline_review.md)
+- [Governed Video Data Platform Blueprint](docs/governed_video_data_platform_blueprint.md)
 - [Golden Standard Video Preprocessing Toolkit](docs/golden_standard_video_preprocessing_toolkit.md)
 - [Hardware-to-Ready Dataset Flowchart](docs/hardware_to_ready_dataset_flowchart.md)
 - [Legal and Governance Checklist for Egocentric Video Datasets](docs/legal_governance_checklist.md)
@@ -39,6 +41,7 @@ This collection covers:
 - Core datasets and benchmarks such as EPIC-KITCHENS, Ego4D, Ego-Exo4D, and MECCANO.
 - Feature extraction, hand-object interaction, temporal segmentation, and multimodal classification.
 - A user/developer intake schema for viewpoint, mount, filming theme, location sensitivity, and purpose.
+- A governed platform blueprint for assigning filming jobs, accepting uploads, reviewing legal risk, and building datasets.
 - Edge and cloud pipeline design for fast upload-time processing.
 - Privacy, consent, and governance considerations for wearable first-person video.
 - Legal-first review points for capture, upload, model inference, dataset release, and deletion.

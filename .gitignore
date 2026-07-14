@@ -30,6 +30,7 @@ docs/*
 !docs/hardware_software_setup.md
 !docs/preprocessing_pipeline_logic.md
 !docs/golden_standard_video_preprocessing_toolkit.md
+!docs/governed_video_data_platform_blueprint.md
 
 # Local TDSEM/dissertation pipeline code not intended for this public collection
 src/
